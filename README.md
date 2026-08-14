@@ -1,6 +1,6 @@
 # 🛡️ Proxmox Drive Guardian (`pve-drive-guardian`)
 
-> **Autonomous Storage AI, Thermal Protection & Bad Sector Shield for Proxmox VE & Linux Homelabs.**  
+> **Autonomous Storage Intelligence, Thermal Protection & Bad Sector Shield for Proxmox VE & Linux Homelabs.**  
 > Protects aging/failing hard drives, prevents overheating, eliminates spurious spinup polling, isolates bad sectors, and autonomously evacuates critical storage archives.
 
 ---

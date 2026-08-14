@@ -91,7 +91,7 @@ def post_json(endpoint, payload):
 
 def print_banner():
     print("\033[1;36m" + "=" * 76)
-    print(" 🛡️  PROXMOX DRIVE GUARDIAN — STORAGE AI & THERMAL PROTECTION")
+    print(" 🛡️  PROXMOX DRIVE GUARDIAN — AUTONOMOUS STORAGE INTELLIGENCE")
     print("=" * 76 + "\033[0m")
 
 def show_status():

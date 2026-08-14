@@ -2,7 +2,7 @@
 """
 Proxmox Drive Guardian (pve-drive-guardian)
 ==========================================
-Autonomous Storage AI & Thermal Protection System for Proxmox VE & Linux Homelabs.
+Autonomous Storage Intelligence & Thermal Protection System for Proxmox VE & Linux Homelabs.
 Open-Source Community Edition (Zero Hardcoded Personal Data or Host Info)
 """
 
