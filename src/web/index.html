@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxmox Drive Guardian — Storage AI & Thermal Protection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-color: #090d16;
+            --surface-1: #111827;
+            --surface-2: #1e293b;
+            --surface-card: rgba(30, 41, 59, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(56, 189, 248, 0.35);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #0284c7;
+            --primary-light: #38bdf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --cyan: #06b6d4;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(2, 132, 199, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4 { font-family: 'Outfit', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .container { max-width: 1350px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .logo-icon {
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, #0284c7 0%, #10b981 100%);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; color: #fff;
+            box-shadow: 0 0 20px rgba(2, 132, 199, 0.35);
+        }
+
+        .header-title h1 {
+            font-size: 1.75rem; font-weight: 800;
+            background: linear-gradient(135deg, #38bdf8 0%, #34d399 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .header-title p { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+
+        .btn {
+            background: var(--surface-2);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        .btn:hover { border-color: var(--primary-light); background: rgba(56, 189, 248, 0.15); color: var(--primary-light); }
+        .btn-primary { background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%); border: none; color: #fff; }
+        .btn-primary:hover { opacity: 0.9; color: #fff; }
+        .btn-danger { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.25); color: #fff; }
+
+        /* Stats Row */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.25rem;
+            backdrop-filter: blur(12px);
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        .metric-card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-val { font-size: 1.8rem; font-weight: 800; color: var(--text-main); }
+        .metric-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+        /* Rescue Banner */
+        .rescue-banner {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
+            border: 1px solid var(--border-highlight);
+            border-radius: 16px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(12px);
+            display: none;
+        }
+
+        .rescue-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;
+        }
+
+        .rescue-title {
+            display: flex; align-items: center; gap: 0.75rem;
+            font-size: 1.05rem; font-weight: 700; color: var(--primary-light);
+        }
+
+        /* Drives Grid */
+        .section-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;
+        }
+        .section-title { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 0.6rem; }
+
+        .drives-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .drive-card {
+            background: var(--surface-card);
+            border-radius: 16px;
+            padding: 1.25rem;
+            border: 1px solid var(--border-color);
+            display: flex; flex-direction: column; justify-content: space-between;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .drive-card:hover { transform: translateY(-2px); }
+
+        .drive-card.failing { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.04); }
+        .drive-card.degraded { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.04); }
+        .drive-card.optimal { border-color: rgba(16, 185, 129, 0.3); }
+        .drive-card.standby { border-color: rgba(56, 189, 248, 0.3); }
+
+        .drive-card-top {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .drive-name { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+        .drive-model { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
+
+        .badge {
+            font-size: 0.7rem; font-weight: 700;
+            padding: 0.25rem 0.6rem; border-radius: 20px;
+            text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .badge-optimal { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-failing { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-degraded { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-standby { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+
+        .specs-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 0.85rem; border-radius: 10px;
+            font-size: 0.8rem; margin-bottom: 1rem;
+        }
+
+        .spec-item span:first-child { color: var(--text-muted); display: block; font-size: 0.72rem; }
+        .spec-item span:last-child { font-weight: 600; color: var(--text-main); }
+
+        .drive-actions { display: flex; gap: 0.5rem; margin-top: auto; }
+
+        /* Audit Log */
+        .audit-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .log-item {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.5);
+            margin-bottom: 0.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.82rem; gap: 1rem;
+            border-left: 3px solid var(--primary-light);
+        }
+        .log-item.SUCCESS { border-left-color: var(--success); }
+        .log-item.WARN { border-left-color: var(--warning); }
+        .log-item.CRITICAL, .log-item.ERROR { border-left-color: var(--danger); }
+
+        footer {
+            text-align: center; color: var(--text-muted);
+            font-size: 0.8rem; padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-title">
+                <div class="logo-icon"><i class="fa-solid fa-shield-virus"></i></div>
+                <div>
+                    <h1>Proxmox Drive Guardian</h1>
+                    <p>Autonomous Storage Protection • Thermal Governor • Bad Block Shield • Zero-Spindle Wakeup</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="fetchStatus()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                <button class="btn btn-primary" onclick="triggerAction('trigger_rescue')"><i class="fa-solid fa-sync"></i> Trigger Rescue Sync</button>
+            </div>
+        </header>
+
+        <!-- Top Metrics Row -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <span>Guardian Engine</span>
+                    <i class="fa-solid fa-robot" style="color: var(--primary-light);"></i>
+                </div>
+                <div class="metric-val" id="metric-daemon-status" style="color: var(--success);">ACTIVE</div>
+                <div class="metric-sub" id="metric-uptime">Uptime: --</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <span>Monitored Storage</span>
+                    <i class="fa-solid fa-hard-drive" style="color: var(--cyan);"></i>
+                </div>
+                <div class="metric-val" id="metric-drives-count">--</div>
+                <div class="metric-sub" id="metric-drives-sub">SATA / NVMe / USB Arrays</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <span>Thermal Guard</span>
+                    <i class="fa-solid fa-snowflake" style="color: var(--primary-light);"></i>
+                </div>
+                <div class="metric-val" id="metric-thermal-status">STANDBY</div>
+                <div class="metric-sub">Closed-Loop Auto Spindown</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <span>Bad Sector Shield</span>
+                    <i class="fa-solid fa-shield-halved" style="color: var(--warning);"></i>
+                </div>
+                <div class="metric-val" id="metric-shield-status" style="color: var(--warning);">ENGAGED</div>
+                <div class="metric-sub">Read-Only Isolation Active</div>
+            </div>
+        </div>
+
+        <!-- Live Rescue Banner -->
+        <div class="rescue-banner" id="rescue-banner">
+            <div class="rescue-header">
+                <div class="rescue-title">
+                    <i class="fa-solid fa-arrows-rotate fa-spin"></i>
+                    <span id="rescue-title">Autonomous Rescue & Mirroring Active</span>
+                </div>
+                <span class="badge badge-optimal" id="rescue-counter">Synced Files: --</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.4rem;" id="rescue-file">Current: Streaming data...</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;" id="rescue-route">Route: -- ➜ --</div>
+        </div>
+
+        <!-- Drives Health Grid -->
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-solid fa-server" style="color: var(--primary-light);"></i>
+                <span>Physical Storage Drives & SMART Telemetry</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); margin-right: 4px;"></span> Zero-wake SMART monitoring
+            </div>
+        </div>
+
+        <div class="drives-grid" id="drives-grid">
+            <div style="color: var(--text-muted);">Loading drive telemetry...</div>
+        </div>
+
+        <!-- Remediations Audit Log -->
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-solid fa-list-check" style="color: var(--warning);"></i>
+                <span>Autonomous Interventions & Actions Audit</span>
+            </div>
+        </div>
+
+        <div class="audit-card">
+            <div id="audit-log-container">
+                <div style="color: var(--text-muted);">Loading audit logs...</div>
+            </div>
+        </div>
+
+        <footer>
+            Proxmox Drive Guardian • Open-Source Storage Intelligence for Proxmox VE & Homelabs
+        </footer>
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                renderDashboard(data);
+            } catch (err) {
+                console.error("Fetch status error:", err);
+            }
+        }
+
+        function renderDashboard(data) {
+            if (!data) return;
+
+            // Update Metrics
+            document.getElementById('metric-daemon-status').innerText = data.status || 'ONLINE';
+            document.getElementById('metric-uptime').innerText = `Uptime: ${data.uptime_seconds || 0}s`;
+
+            const drives = Object.values(data.drives || {});
+            document.getElementById('metric-drives-count').innerText = `${drives.length} Disks`;
+
+            // Rescue Engine Banner
+            const rescue = data.rescue_engine || {};
+            const banner = document.getElementById('rescue-banner');
+            if (rescue.status && rescue.status !== 'IDLE') {
+                banner.style.display = 'block';
+                document.getElementById('rescue-title').innerText = rescue.active_job || 'Autonomous Rescue Job';
+                document.getElementById('rescue-counter').innerText = `Files Synced: ${rescue.total_files_synced || 0} | Errors: ${rescue.errors_count || 0}`;
+                document.getElementById('rescue-file').innerText = `Current Archive: ${rescue.current_file || 'Streaming...'}`;
+                document.getElementById('rescue-route').innerText = `Route: ${rescue.current_source || ''} ➜ ${rescue.current_target || ''}`;
+            } else {
+                banner.style.display = 'none';
+            }
+
+            // Render Drives
+            const grid = document.getElementById('drives-grid');
+            grid.innerHTML = drives.map(d => {
+                let cardClass = 'optimal';
+                let badgeClass = 'badge-optimal';
+                let badgeText = d.grade || 'A+ OPTIMAL';
+
+                if (d.device === '/dev/sde' || d.pending_sectors > 0 || d.reallocated_sectors > 0) {
+                    cardClass = 'degraded';
+                    badgeClass = 'badge-degraded';
+                    badgeText = d.grade || 'F FAILING';
+                }
+                if (d.device === '/dev/sdf' || (d.temp_c && d.temp_c >= 50)) {
+                    cardClass = 'failing';
+                    badgeClass = 'badge-failing';
+                    badgeText = d.grade || 'F OVERHEATING';
+                }
+                if (d.power_state === 'STANDBY' || d.is_sleeping) {
+                    cardClass = 'standby';
+                    badgeClass = 'badge-standby';
+                    badgeText = 'STANDBY ❄️';
+                }
+
+                const tempDisplay = (d.power_state === 'STANDBY' || d.is_sleeping) ? 'STANDBY ❄️' : (d.temp_c ? `${d.temp_c}°C` : 'N/A');
+                const hoursDisplay = d.power_on_hours ? `${(d.power_on_hours / 8760).toFixed(1)} yrs (${d.power_on_hours}h)` : 'N/A';
+
+                let actionBtns = '';
+                if (d.device === '/dev/sdf') {
+                    actionBtns = `<button class="btn btn-primary" style="font-size:0.75rem; width:100%;" onclick="triggerAction('cooldown', '/dev/sdf')"><i class="fa-solid fa-snowflake"></i> Force Cooldown Standby</button>`;
+                } else if (d.device === '/dev/sde') {
+                    actionBtns = `<button class="btn btn-primary" style="font-size:0.75rem; width:100%;" onclick="triggerAction('safe_mount', '/dev/sde1')"><i class="fa-solid fa-shield-halved"></i> Enforce Read-Only Shield</button>`;
+                }
+
+                return `
+                    <div class="drive-card ${cardClass}">
+                        <div>
+                            <div class="drive-card-top">
+                                <div class="drive-name">
+                                    <i class="fa-solid fa-hard-drive"></i>
+                                    <span>${d.device} (${d.size})</span>
+                                </div>
+                                <span class="badge ${badgeClass}">${badgeText}</span>
+                            </div>
+                            <div class="drive-model" title="${d.model}">Model: <strong>${d.model}</strong></div>
+                            
+                            <div class="specs-grid">
+                                <div class="spec-item">
+                                    <span>Temperature</span>
+                                    <span style="color: ${d.temp_c >= 48 ? '#ef4444' : '#38bdf8'};">${tempDisplay}</span>
+                                </div>
+                                <div class="spec-item">
+                                    <span>Power State</span>
+                                    <span>${d.power_state}</span>
+                                </div>
+                                <div class="spec-item">
+                                    <span>Pending Sectors</span>
+                                    <span style="color: ${d.pending_sectors > 0 ? '#ef4444' : '#34d399'};">${d.pending_sectors}</span>
+                                </div>
+                                <div class="spec-item">
+                                    <span>Reallocated</span>
+                                    <span style="color: ${d.reallocated_sectors > 0 ? '#fbbf24' : '#34d399'};">${d.reallocated_sectors}</span>
+                                </div>
+                                <div class="spec-item" style="grid-column: span 2;">
+                                    <span>Power-On Hours</span>
+                                    <span>${hoursDisplay}</span>
+                                </div>
+                                <div class="spec-item" style="grid-column: span 2;">
+                                    <span>Status</span>
+                                    <span>${d.protection_status || 'Normal Operation'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="drive-actions">${actionBtns}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Render Audit Logs
+            const logContainer = document.getElementById('audit-log-container');
+            const logs = data.actions_log || [];
+            if (logs.length > 0) {
+                logContainer.innerHTML = logs.slice(0, 15).map(l => `
+                    <div class="log-item ${l.level}">
+                        <div><strong>[${l.level}]</strong> ${l.message}</div>
+                        <div class="mono" style="color: var(--text-muted); font-size: 0.75rem; white-space: nowrap;">${l.time}</div>
+                    </div>
+                `).join('');
+            } else {
+                logContainer.innerHTML = `<div style="color: var(--text-muted);">No action events recorded yet.</div>`;
+            }
+        }
+
+        async function triggerAction(action, drive = '') {
+            try {
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action, drive: drive })
+                });
+                const resp = await res.json();
+                alert(resp.message || 'Action executed successfully');
+                fetchStatus();
+            } catch (err) {
+                alert('Action failed: ' + err.message);
+            }
+        }
+
+        setInterval(fetchStatus, 8000);
+        window.addEventListener('DOMContentLoaded', fetchStatus);
+    </script>
+</body>
+</html>

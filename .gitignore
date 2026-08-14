@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# State & Logs
+*.log
+state.json
+
+# Local custom configuration (use config.json.example instead)
+src/config.json
+config.json
+
+# Environment & OS files
+.DS_Store
+.env

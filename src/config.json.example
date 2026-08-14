@@ -1,0 +1,37 @@
+{
+  "guardian": {
+    "version": "2.4.0",
+    "poll_interval_seconds": 15,
+    "api_port": 8095,
+    "web_ui_enabled": true,
+    "log_file": "/var/log/pve-drive-guardian.log",
+    "state_file": "/var/lib/pve-drive-guardian/state.json"
+  },
+  "thermal_governor": {
+    "enabled": true,
+    "warning_temp_c": 45,
+    "critical_temp_c": 52,
+    "cooldown_target_temp_c": 40,
+    "default_hdd_standby_minutes": 3,
+    "auto_spindown_on_overheat": true
+  },
+  "degradation_shield": {
+    "enabled": true,
+    "auto_remount_ro_on_bad_sectors": true,
+    "min_pending_sectors_trigger": 1,
+    "min_reallocated_sectors_trigger": 50,
+    "kernel_block_timeout_seconds": 15,
+    "optimal_scheduler": "mq-deadline"
+  },
+  "rescue_engine": {
+    "enabled": false,
+    "source_path": "/mnt/source-drive",
+    "target_path": "/mnt/backup-pool",
+    "ionice_class": 3,
+    "nice_level": 19,
+    "auto_redirect_proxmox_vzdump": false
+  },
+  "protected_system_drives": [
+    "/dev/sda"
+  ]
+}
