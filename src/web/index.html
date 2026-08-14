@@ -202,7 +202,7 @@
         .spec-item span:first-child { color: var(--text-muted); display: block; font-size: 0.72rem; }
         .spec-item span:last-child { font-weight: 600; color: var(--text-main); }
 
-        .drive-actions { display: flex; gap: 0.5rem; margin-top: auto; }
+        .drive-actions { display: flex; gap: 0.5rem; margin-top: auto; flex-wrap: wrap; }
 
         /* Audit Log */
         .audit-card {
@@ -244,6 +244,7 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button class="btn" onclick="setApiToken()"><i class="fa-solid fa-key"></i> <span id="auth-btn-label">API Key</span></button>
                 <button class="btn" onclick="fetchStatus()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
                 <button class="btn btn-primary" onclick="triggerAction('trigger_rescue')"><i class="fa-solid fa-sync"></i> Trigger Rescue Sync</button>
             </div>
@@ -336,9 +337,39 @@
     </div>
 
     <script>
+        function getAuthHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            const token = localStorage.getItem('guardian_api_token');
+            if (token) {
+                headers['Authorization'] = 'Bearer ' + token;
+                headers['X-API-Key'] = token;
+            }
+            return headers;
+        }
+
+        function setApiToken() {
+            const current = localStorage.getItem('guardian_api_token') || '';
+            const token = prompt('Enter your Drive Guardian API Token (leave empty if token auth is disabled):', current);
+            if (token !== null) {
+                if (token.trim()) {
+                    localStorage.setItem('guardian_api_token', token.trim());
+                    document.getElementById('auth-btn-label').innerText = 'Key Set ✓';
+                } else {
+                    localStorage.removeItem('guardian_api_token');
+                    document.getElementById('auth-btn-label').innerText = 'API Key';
+                }
+                fetchStatus();
+            }
+        }
+
         async function fetchStatus() {
             try {
-                const res = await fetch('/api/status');
+                const res = await fetch('/api/status', { headers: getAuthHeaders() });
+                if (res.status === 401) {
+                    document.getElementById('metric-daemon-status').innerText = 'AUTH REQUIRED';
+                    document.getElementById('metric-daemon-status').style.color = 'var(--warning)';
+                    return;
+                }
                 const data = await res.json();
                 renderDashboard(data);
             } catch (err) {
@@ -351,6 +382,7 @@
 
             // Update Metrics
             document.getElementById('metric-daemon-status').innerText = data.status || 'ONLINE';
+            document.getElementById('metric-daemon-status').style.color = 'var(--success)';
             document.getElementById('metric-uptime').innerText = `Uptime: ${data.uptime_seconds || 0}s`;
 
             const drives = Object.values(data.drives || {});
@@ -371,20 +403,25 @@
 
             // Render Drives
             const grid = document.getElementById('drives-grid');
+            if (drives.length === 0) {
+                grid.innerHTML = '<div style="color: var(--text-muted); grid-column: 1/-1;">No physical block drives detected or monitoring initializing...</div>';
+                return;
+            }
+
             grid.innerHTML = drives.map(d => {
                 let cardClass = 'optimal';
                 let badgeClass = 'badge-optimal';
                 let badgeText = d.grade || 'A+ OPTIMAL';
 
-                if (d.device === '/dev/sde' || d.pending_sectors > 0 || d.reallocated_sectors > 0) {
+                if (d.pending_sectors > 0 || d.reallocated_sectors > 0 || (d.health_score && d.health_score < 60)) {
                     cardClass = 'degraded';
                     badgeClass = 'badge-degraded';
-                    badgeText = d.grade || 'F FAILING';
+                    badgeText = d.grade || 'DEGRADED';
                 }
-                if (d.device === '/dev/sdf' || (d.temp_c && d.temp_c >= 50)) {
+                if (d.temp_c && d.temp_c >= 50) {
                     cardClass = 'failing';
                     badgeClass = 'badge-failing';
-                    badgeText = d.grade || 'F OVERHEATING';
+                    badgeText = d.grade || 'OVERHEATING';
                 }
                 if (d.power_state === 'STANDBY' || d.is_sleeping) {
                     cardClass = 'standby';
@@ -395,12 +432,11 @@
                 const tempDisplay = (d.power_state === 'STANDBY' || d.is_sleeping) ? 'STANDBY ❄️' : (d.temp_c ? `${d.temp_c}°C` : 'N/A');
                 const hoursDisplay = d.power_on_hours ? `${(d.power_on_hours / 8760).toFixed(1)} yrs (${d.power_on_hours}h)` : 'N/A';
 
-                let actionBtns = '';
-                if (d.device === '/dev/sdf') {
-                    actionBtns = `<button class="btn btn-primary" style="font-size:0.75rem; width:100%;" onclick="triggerAction('cooldown', '/dev/sdf')"><i class="fa-solid fa-snowflake"></i> Force Cooldown Standby</button>`;
-                } else if (d.device === '/dev/sde') {
-                    actionBtns = `<button class="btn btn-primary" style="font-size:0.75rem; width:100%;" onclick="triggerAction('safe_mount', '/dev/sde1')"><i class="fa-solid fa-shield-halved"></i> Enforce Read-Only Shield</button>`;
-                }
+                const devEscaped = encodeURIComponent(d.device);
+                const actionBtns = `
+                    <button class="btn" style="font-size:0.75rem; flex:1;" onclick="triggerAction('cooldown', '${d.device}')"><i class="fa-solid fa-snowflake"></i> Cooldown</button>
+                    <button class="btn btn-danger" style="font-size:0.75rem; flex:1;" onclick="triggerAction('safe_mount', '${d.device}')"><i class="fa-solid fa-shield-halved"></i> Read-Only</button>
+                `;
 
                 return `
                     <div class="drive-card ${cardClass}">
@@ -408,7 +444,7 @@
                             <div class="drive-card-top">
                                 <div class="drive-name">
                                     <i class="fa-solid fa-hard-drive"></i>
-                                    <span>${d.device} (${d.size})</span>
+                                    <span>${d.device} (${d.size || 'N/A'})</span>
                                 </div>
                                 <span class="badge ${badgeClass}">${badgeText}</span>
                             </div>
@@ -465,15 +501,28 @@
             try {
                 const res = await fetch('/api/action', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ action: action, drive: drive })
                 });
+                if (res.status === 401) {
+                    alert('Authentication failed: Missing or invalid API Token. Click "API Key" in the top bar to set it.');
+                    setApiToken();
+                    return;
+                }
                 const resp = await res.json();
-                alert(resp.message || 'Action executed successfully');
+                if (resp.success) {
+                    alert(resp.message || 'Action executed successfully');
+                } else {
+                    alert('Action warning: ' + (resp.error || resp.message || 'Action rejected'));
+                }
                 fetchStatus();
             } catch (err) {
                 alert('Action failed: ' + err.message);
             }
+        }
+
+        if (localStorage.getItem('guardian_api_token')) {
+            document.getElementById('auth-btn-label').innerText = 'Key Set ✓';
         }
 
         setInterval(fetchStatus, 8000);

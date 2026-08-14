@@ -1,8 +1,10 @@
 {
   "guardian": {
-    "version": "2.4.0",
+    "version": "2.4.1",
     "poll_interval_seconds": 15,
+    "api_host": "127.0.0.1",
     "api_port": 8095,
+    "api_token": "",
     "web_ui_enabled": true,
     "log_file": "/var/log/pve-drive-guardian.log",
     "state_file": "/var/lib/pve-drive-guardian/state.json"
@@ -27,6 +29,7 @@
     "enabled": false,
     "source_path": "/mnt/source-drive",
     "target_path": "/mnt/backup-pool",
+    "rsync_chmod": "Du=rwx,Dgo=rx,Fu=rw,Fgo=r",
     "ionice_class": 3,
     "nice_level": 19,
     "auto_redirect_proxmox_vzdump": false

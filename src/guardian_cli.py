@@ -8,17 +8,61 @@ Open-Source Community Edition (Zero Hardcoded Personal Data or Host Info)
 
 import sys
 import os
+import re
 import json
 import urllib.request
 import urllib.error
 
-API_URL = "http://127.0.0.1:8095"
+CONFIG_PATHS = [
+    "/etc/pve-drive-guardian/config.json",
+    os.path.join(os.path.dirname(__file__), "config.json"),
+    os.path.join(os.path.dirname(__file__), "config.json.example")
+]
+
+def load_cli_config():
+    cfg = {"api_host": "127.0.0.1", "api_port": 8095, "api_token": ""}
+    for p in CONFIG_PATHS:
+        if os.path.exists(p):
+            try:
+                with open(p, "r") as f:
+                    data = json.load(f)
+                    g = data.get("guardian", {})
+                    cfg["api_host"] = g.get("api_host", "127.0.0.1")
+                    cfg["api_port"] = g.get("api_port", 8095)
+                    cfg["api_token"] = g.get("api_token", "").strip()
+                break
+            except Exception:
+                pass
+    # Allow environment variable override for API token
+    env_token = os.environ.get("GUARDIAN_API_TOKEN", "").strip()
+    if env_token:
+        cfg["api_token"] = env_token
+    return cfg
+
+cli_config = load_cli_config()
+API_HOST = "127.0.0.1" if cli_config["api_host"] in ["0.0.0.0", "::"] else cli_config["api_host"]
+API_PORT = cli_config["api_port"]
+API_TOKEN = cli_config["api_token"]
+API_URL = f"http://{API_HOST}:{API_PORT}"
+
+DEVICE_REGEX = re.compile(r"^/dev/(sd[a-z][0-9]*|nvme[0-9]n[0-9](p[0-9]+)?|vd[a-z][0-9]*|hd[a-z][0-9]*)$")
+
+def get_headers():
+    headers = {"Content-Type": "application/json"}
+    if API_TOKEN:
+        headers["Authorization"] = f"Bearer {API_TOKEN}"
+        headers["X-API-Key"] = API_TOKEN
+    return headers
 
 def get_json(endpoint):
     try:
-        req = urllib.request.Request(f"{API_URL}{endpoint}")
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        req = urllib.request.Request(f"{API_URL}{endpoint}", headers=get_headers())
+        with urllib.request.urlopen(req, timeout=4) as resp:
             return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as he:
+        if he.code == 401:
+            print("\033[1;31m[-] HTTP 401 Unauthorized: API token required or invalid. Check /etc/pve-drive-guardian/config.json or GUARDIAN_API_TOKEN.\033[0m")
+        return None
     except Exception:
         if endpoint in ["/api/status", "/status"] and os.path.exists("/var/lib/pve-drive-guardian/state.json"):
             try:
@@ -32,9 +76,16 @@ def get_json(endpoint):
 def post_json(endpoint, payload):
     try:
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(f"{API_URL}{endpoint}", data=data, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(f"{API_URL}{endpoint}", data=data, headers=get_headers())
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as he:
+        if he.code == 401:
+            return {"error": "HTTP 401 Unauthorized: API token required or invalid. Set api_token in config.json or export GUARDIAN_API_TOKEN."}
+        try:
+            return json.loads(he.read().decode("utf-8"))
+        except Exception:
+            return {"error": f"HTTP Error {he.code}: {he.reason}"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -110,11 +161,19 @@ def show_rescue():
     print(json.dumps(rescue, indent=2))
 
 def trigger_cooldown(target):
-    if not target:
-        print("Usage: drive-guardian cool /dev/sdX")
+    if not target or not DEVICE_REGEX.match(target):
+        print("\033[1;31m[-] Invalid device format. Example usage: drive-guardian cool /dev/sdX\033[0m")
         return
     print(f"\033[1;34m[*] Requesting emergency standby/cooldown for {target}...\033[0m")
     res = post_json("/api/action", {"action": "cooldown", "drive": target})
+    print(f"\033[1;32m[+] Response: {res}\033[0m")
+
+def trigger_safe_mount(target):
+    if not target or not DEVICE_REGEX.match(target):
+        print("\033[1;31m[-] Invalid device format. Example usage: drive-guardian safe-mount /dev/sdX1\033[0m")
+        return
+    print(f"\033[1;34m[*] Requesting read-only remount shield for {target}...\033[0m")
+    res = post_json("/api/action", {"action": "safe_mount", "drive": target})
     print(f"\033[1;32m[+] Response: {res}\033[0m")
 
 def trigger_rescue():
@@ -136,7 +195,7 @@ def show_logs():
 def main():
     if len(sys.argv) < 2:
         show_status()
-        print("Commands: status | rescue | cool <dev> | trigger-rescue | logs")
+        print("Commands: status | rescue | cool <dev> | safe-mount <dev> | trigger-rescue | logs")
         return
 
     cmd = sys.argv[1].lower()
@@ -147,13 +206,16 @@ def main():
     elif cmd in ["cool", "sleep", "standby"]:
         target = sys.argv[2] if len(sys.argv) > 2 else ""
         trigger_cooldown(target)
+    elif cmd in ["safe-mount", "safemount", "ro"]:
+        target = sys.argv[2] if len(sys.argv) > 2 else ""
+        trigger_safe_mount(target)
     elif cmd in ["trigger-rescue", "start-rescue"]:
         trigger_rescue()
     elif cmd in ["logs", "log", "l"]:
         show_logs()
     else:
         print(f"Unknown command: {cmd}")
-        print("Usage: drive-guardian [status|rescue|cool <dev>|trigger-rescue|logs]")
+        print("Usage: drive-guardian [status|rescue|cool <dev>|safe-mount <dev>|trigger-rescue|logs]")
 
 if __name__ == "__main__":
     main()
